@@ -1,13 +1,11 @@
 from threading import Thread
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import urllib.parse
-from http import client
-import socket
-import pathlib
 import mimetypes
 import json
 from datetime import datetime
-
+import socket
+import pathlib
 
 BASE_DIR = pathlib.Path()
 
@@ -21,10 +19,8 @@ class MainServer(BaseHTTPRequestHandler):
         self.send_data_socket(data.decode())
         self.save_data_to_json(data)
         self.send_response(200)
-        self.send_header('Location', '/messege')
+        self.send_header('Location', '/message')
         self.end_headers()
-
-
 
     def send_static(self, file):
         self.send_response(200)
@@ -36,7 +32,6 @@ class MainServer(BaseHTTPRequestHandler):
         self.end_headers()
         with open(file, 'rb') as fd:   
             self.wfile.write(fd.read())
- 
 
     def send_html(self, filename, status=200):
         self.send_response(status)
@@ -48,46 +43,42 @@ class MainServer(BaseHTTPRequestHandler):
     def save_data_to_json(self, data):
         data_parse = urllib.parse.unquote_plus(data.decode())
         data_parse = {key: value for key, value in [el.split('=') for el in data_parse.split('&')]}
-        new_time = datetime.strftime(datetime.now())
-        new_data = {new_time : data_parse}
-        with open(BASE_DIR.joinpath('storage/data.json'), 'w', encoding='utf-8') as fd:
-            json.dump(new_data, fd, indent=3, ensure_ascii=False)    
-
+        new_time = datetime.strftime(datetime.now(), '%Y-%m-%d %H:%M:%S')
+        new_data = {new_time: data_parse}
+        with open(BASE_DIR.joinpath('storage/data.json'), 'a', encoding='utf-8') as fd:
+            json.dump(new_data, fd, indent=3, ensure_ascii=False)
+            fd.write('\n')
 
     def router(self):
         pr_url = urllib.parse.urlparse(self.path)
 
         match pr_url.path:
             case '/':
-                self.send_html_file('index.html')
-            case '/messege':
-                self.send_html_file('messege.html')
+                self.send_html('index.html')
+            case '/message':
+                self.send_html('message.html')
             case _:
                 file = BASE_DIR.joinpath(pr_url.path[1:])
                 if file.exists():
                     self.send_static(file)
                 else:
-                    self.send_html_file('error.html', 404)
+                    self.send_html('error.html', 404)
 
-
-    def client(self, message):
+    def send_data_socket(self, data):
         host = socket.gethostname()
         port = 5000
 
         client_socket = socket.socket()
         client_socket.connect((host, port))
 
-        while message.lower():
-            client_socket.send(message.encode())
-            data = client_socket.recv(1024).decode()
-            print(f'received message: {data}')
-            message = input('--> ')
+        client_socket.send(data.encode())
+        response = client_socket.recv(1024).decode()
+        print(f'Received response from socket server: {response}')
 
         client_socket.close()
 
-
 def server_socket():
-    print("start socket runing")
+    print("start socket running")
     host = socket.gethostname()
     port = 5000
 
@@ -101,8 +92,11 @@ def server_socket():
 
         if not data:
             break
-        print(f'received message: {data}')
-        
+        print(f'received message from socket client: {data}')
+        # Відповідь клієнту
+        response = f"Received your message: {data}"
+        conn.send(response.encode())
+
     conn.close()  
 
 def run(server_class=HTTPServer, handler_class=MainServer):
@@ -116,9 +110,6 @@ def run(server_class=HTTPServer, handler_class=MainServer):
 
     except KeyboardInterrupt:
         http.server_close()    
-
-
-
 
 if __name__ == '__main__':
     run()
